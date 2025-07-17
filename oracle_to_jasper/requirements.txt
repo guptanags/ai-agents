@@ -1,0 +1,1 @@
+pip install lxml jinja2 sqlparse requests
