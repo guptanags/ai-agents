@@ -58,7 +58,7 @@ def validate_report(rdf_file, jrxml_file, rdf_pdf, jrxml_pdf):
 
             **Instructions**:
             1. Generate a Python script to:
-               - Compare query results using a MySQL database connection.
+               - Compare query results using a Oracle database connection.
                - Compare PDF outputs using ImageMagick’s `compare` command.
             2. Suggest fixes for common visual discrepancies (e.g., font mismatch, chart size).
             3. Include error handling for database and ImageMagick failures.
@@ -70,7 +70,7 @@ def validate_report(rdf_file, jrxml_file, rdf_pdf, jrxml_pdf):
             **Expected Output**:
             ```json
             {{
-              "script": "import mysql.connector\\n...",
+              "script": "import oracle.connector\\n...",
               "fixes": [
                 "Adjust chart width to 200px in JRXML",
                 "Update font to Arial in <style> element"
@@ -79,7 +79,7 @@ def validate_report(rdf_file, jrxml_file, rdf_pdf, jrxml_pdf):
             ```
 
             **Constraints**:
-            - Use `mysql-connector-python` for database access.
+            - Use `oracle-connector-python` for database access.
             - Ensure compatibility with ImageMagick 7.x.
             - Handle missing data or files gracefully.
             """

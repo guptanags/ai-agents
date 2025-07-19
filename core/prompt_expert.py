@@ -1,10 +1,10 @@
 from core.action_context import ActionContext
-from core.prompt import Prompt
+from core.prompt import Prompt, generate_response
 from core.tool_decorator import register_tool
 
 
 @register_tool()
-def prompt_expert(action_context: ActionContext, description_of_expert: str, prompt: str) -> str:
+def prompt_expert( description_of_expert: str, prompt: str) -> str:
     """
     Generate a response from an expert persona.
     
@@ -19,12 +19,12 @@ def prompt_expert(action_context: ActionContext, description_of_expert: str, pro
     Returns:
         The expert's response
     """
-    generate_response = action_context.get("llm")
-    if generate_response is None:
-        raise ValueError("No LLM function found in ActionContext under key 'llm'")
-    response = generate_response(Prompt(messages=[
+    
+    
+    prompt = Prompt(messages=[
         {"role": "system", 
          "content": f"Act as the following expert and respond accordingly: {description_of_expert}"},
         {"role": "user", "content": prompt}
-    ]))
+    ])
+    response = generate_response(prompt)
     return response
