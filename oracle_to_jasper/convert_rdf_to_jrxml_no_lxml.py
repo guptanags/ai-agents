@@ -47,7 +47,7 @@ def generate_jrxml_template(rdf_file, mapping):
         ```json
         {json.dumps(mapping, indent=2)}
         ```
-        - Context: Oracle RDF files contain multiple `<query>` elements with `queryName` or `id` attributes, linked to charts/tables via `queryRef`. Formulas are defined in `<formula>` elements.
+        - Context: Oracle RDF files contain multiple `<query>` elements with `queryName` or `id` attributes, linked to charts/tables via `queryRef`. Formulas are in `<formula>` elements.
 
         **Instructions**:
         1. Generate a Jinja2 template for JasperReports JRXML that includes:
@@ -56,11 +56,12 @@ def generate_jrxml_template(rdf_file, mapping):
            - Chart elements (e.g., `<jr:barChart>`) and table elements (e.g., `<jr:table>`) linked to datasets via `datasetRun`.
            - Styling (borders, colors, fonts) using `<style>`, `<box>`, and `<font>` from `elements.properties`.
         2. Use ONLY the following Jinja2 variables: `queries`, `formulas`, `elements`, `namespace`.
-        3. For chart datasets, use field names from `queries[].fields` (e.g., `$F{{{{queries[0].fields[0]}}}}`).
+        3. For chart datasets, use `elem.key_field` and `elem.value_field` for `<keyExpression>` and `<valueExpression>` (e.g., `$F{{{{elem.key_field}}}}`).
         4. Include namespaces (e.g., `http://jasperreports.sourceforge.net/jasperreports`).
         5. Ensure compatibility with JasperReports 6.x.
         6. Provide comments explaining the structure.
-        7. Avoid undefined variables like `report_data`.
+        7. Avoid undefined variables like `report_data` and complex nested escaping (e.g., `{{ '{{' }}`).
+        8. Ensure valid Jinja2 syntax within `<![CDATA[...]]>` sections.
 
         **Expected Output**:
         A Jinja2 template string, e.g.:
@@ -97,8 +98,8 @@ def generate_jrxml_template(rdf_file, mapping):
                 {% if elem.type == 'jr:barChart' %}
                 <barChartDataset>
                   <dataset/>
-                  <keyExpression><![CDATA[$F{{ '{{' }}{% for q in queries %}{% if q.id == elem.query_id %}{{ q.fields[0] }}{% endif %}{% endfor %}}]]></keyExpression>
-                  <valueExpression><![CDATA[$F{{ '{{' }}{% for q in queries %}{% if q.id == elem.query_id %}{{ q.fields[1] }}{% endif %}{% endfor %}}]]></valueExpression>
+                  <keyExpression><![CDATA[$F{{ elem.key_field }}]]></keyExpression>
+                  <valueExpression><![CDATA[$F{{ elem.value_field }}]]></valueExpression>
                 </barChartDataset>
                 <barPlot/>
                 {% endif %}
@@ -114,7 +115,7 @@ def generate_jrxml_template(rdf_file, mapping):
                     </jr:columnHeader>
                     <jr:detailCell height="30">
                       <textField>
-                        <textFieldExpression><![CDATA[$F{{ '{{' }}{{ field }}}}]]></textFieldExpression>
+                        <textFieldExpression><![CDATA[$F{{ field }}]]></textFieldExpression>
                       </textField>
                     </jr:detailCell>
                   </jr:column>
@@ -131,6 +132,7 @@ def generate_jrxml_template(rdf_file, mapping):
         **Constraints**:
         - Ensure valid JRXML syntax.
         - Use only `queries`, `formulas`, `elements`, `namespace` as Jinja2 variables.
+        - Use `elem.key_field` and `elem.value_field` for chart expressions to avoid complex escaping.
         - Support multiple queries with element-specific datasets.
         - Handle formulas as JRXML variables.
         - Keep the template concise and reusable.
@@ -143,6 +145,14 @@ def generate_jrxml_template(rdf_file, mapping):
         invalid_vars = [var for var in undefined_vars if var not in allowed_vars]
         if invalid_vars:
             print(f"Warning: Template contains undefined variables: {invalid_vars}")
+        
+        # Validate template syntax
+        try:
+            jinja2.Template(template_content)
+        except jinja2.TemplateSyntaxError as e:
+            print(f"Jinja2 template syntax error: {e}")
+            print(f"Template content:\n{template_content}")
+            raise
         
         with open("jasper_template.jrxml", "w") as f:
             f.write(template_content)
@@ -179,14 +189,15 @@ def extract_rdf_metadata(rdf_file, mapping):
            - Table elements from `<element type="table" queryRef="...">` (e.g., style, font).
            - Formulas from `<formula>` elements (e.g., name, expression like `SUM(salary)`).
            - Styling attributes (style, color, font) for each element.
-        2. Map RDF attributes to JRXML equivalents using the mapping schema.
-        3. Return a JSON object with:
+        2. For chart elements, select appropriate `key_field` and `value_field` from the linked query’s fields (e.g., first field for key, second for value).
+        3. Map RDF attributes to JRXML equivalents using the mapping schema.
+        4. Return a JSON object with:
            - `queries`: List of query objects with `id`, `sql`, `fields` (e.g., `[{"id": "q1", "sql": "SELECT name, age ...", "fields": ["name", "age"]}]`).
            - `formulas`: List of formula objects with `name`, `expression` (e.g., `[{"name": "total_salary", "expression": "SUM(salary)"}]`).
-           - `elements`: List of elements with `type`, `namespace`, `properties`, `query_id` (linked to a query `id`).
-        4. Handle missing `queryRef` by mapping queries to elements by order (first query to first element, etc.).
-        5. Include robust error handling for missing elements or malformed XML.
-        6. Ensure compatibility with JasperReports 6.x.
+           - `elements`: List of elements with `type`, `namespace`, `properties`, `query_id`, `key_field`, `value_field` (for charts).
+        5. Handle missing `queryRef` by mapping queries to elements by order (first query to first element, etc.).
+        6. Include robust error handling for missing elements or malformed XML.
+        7. Ensure compatibility with JasperReports 6.x.
 
         **Expected Output**:
         A JSON object, e.g.:
@@ -194,7 +205,7 @@ def extract_rdf_metadata(rdf_file, mapping):
         {{
           "queries": [
             {{"id": "q1", "sql": "SELECT name, age FROM employees WHERE dept = ?", "fields": ["name", "age"]}},
- evidence            {{"id": "q2", "sql": "SELECT dept, COUNT(*) AS emp_count FROM employees GROUP BY dept", "fields": ["dept", "emp_count"]}}
+            {{"id": "q2", "sql": "SELECT dept, COUNT(*) AS emp_count FROM employees GROUP BY dept", "fields": ["dept", "emp_count"]}}
           ],
           "formulas": [
             {{"name": "total_age", "expression": "SUM(age)"}},
@@ -205,6 +216,8 @@ def extract_rdf_metadata(rdf_file, mapping):
               "type": "jr:barChart",
               "namespace": "http://jasperreports.sourceforge.net/jasperreports",
               "query_id": "q1",
+              "key_field": "name",
+              "value_field": "age",
               "properties": {{"border": "1.0", "color": "#FF0000", "fontName": "Arial", "size": "12", "isBold": "true"}}
             }},
             {{
@@ -247,6 +260,8 @@ def convert_rdf_to_jrxml(rdf_file, output_path):
                 raise ValueError(f"Invalid element in LLM output: {elem}")
             if elem["query_id"] not in [q["id"] for q in queries]:
                 print(f"Warning: Element {elem['type']} references invalid query_id {elem['query_id']}")
+            if elem["type"] == "jr:barChart" and ("key_field" not in elem or "value_field" not in elem):
+                print(f"Warning: Chart element {elem['type']} missing key_field or value_field")
 
         # Generate JRXML template
         template_content = generate_jrxml_template(rdf_file, mapping)
