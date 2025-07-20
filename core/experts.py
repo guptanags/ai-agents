@@ -1,5 +1,6 @@
 from core import prompt_expert
 from core.action_context import ActionContext
+from core.prompt import Prompt
 from core.tool_decorator import register_tool
 
 

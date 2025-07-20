@@ -16,37 +16,17 @@ class Agent:
                  agent_language: AgentLanguage,
                  action_registry: ActionRegistry,
                  generate_response: Callable[[Prompt], str],
-                 environment: Environment,
-                 capabilities: List[Capability] = [],
-                 max_iterations: int = 10,
-                 max_duration_seconds: int = 180):
+                 environment: Environment):
         """
-        Initialize an agent with its core GAME components and capabilities.
-        
-        Goals, Actions, Memory, and Environment (GAME) form the core of the agent,
-        while capabilities provide ways to extend and modify the agent's behavior.
-        
-        Args:
-            goals: What the agent aims to achieve
-            agent_language: How the agent formats and parses LLM interactions
-            action_registry: Available tools the agent can use
-            generate_response: Function to call the LLM
-            environment: Manages tool execution and results
-            capabilities: List of capabilities that extend agent behavior
-            max_iterations: Maximum number of action loops
-            max_duration_seconds: Maximum runtime in seconds
+        Initialize an agent with its core GAME components
         """
         self.goals = goals
         self.generate_response = generate_response
         self.agent_language = agent_language
         self.actions = action_registry
         self.environment = environment
-        self.capabilities = capabilities or []
-        self.max_iterations = max_iterations
-        self.max_duration_seconds = max_duration_seconds
 
-        
-    def construct_prompt(self, goals: List[Goal], memory: Memory, actions: ActionRegistry):
+    def construct_prompt(self, goals: List[Goal], memory: Memory, actions: ActionRegistry) -> Prompt:
         """Build prompt with memory context"""
         return self.agent_language.construct_prompt(
             actions=actions.get_actions(),
@@ -56,18 +36,7 @@ class Agent:
         )
 
     def get_action(self, response):
-        """
-        Parse the agent's response and return the action and invocation.
-        Handles both tool-based and conversational (no-tool) modes.
-        """
         invocation = self.agent_language.parse_response(response)
-
-        # If the response is in conversational mode (no tools), just return the response
-        if "tool" not in invocation:
-            # No tool requested, treat as conversational response
-            return None, invocation
-
-        # Otherwise, proceed as before for tool-based invocation
         action = self.actions.get_action(invocation["tool"])
         return action, invocation
 
@@ -112,15 +81,9 @@ class Agent:
             # Determine which action the agent wants to execute
             action, invocation = self.get_action(response)
 
-            # If no action (conversational mode), just store the response and break
-            if action is None:
-                print(f"Agent Response: {invocation.get('response')}")
-                self.update_memory(memory, response, {"tool_executed": False, "result": invocation.get("response")})
-                break
-
             # Execute the action in the environment
-            result = self.environment.execute_action(action, invocation.get("args", {}))
-            print(f"Action Result: {result}")
+            result = self.environment.execute_action(action, invocation["args"])
+           
 
             # Update the agent's memory with information about what happened
             self.update_memory(memory, response, result)

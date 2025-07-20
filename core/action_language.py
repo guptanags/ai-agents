@@ -6,7 +6,6 @@ from core.action import Action
 from core.goal import Goal
 from core.memory import Memory
 from core.prompt import Prompt
-from litellm import completion
 from dataclasses import dataclass, field
 from typing import List, Callable, Dict, Any
 

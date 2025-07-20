@@ -1,5 +1,6 @@
 from core.action_context import ActionContext
-from core.prompt import Prompt, generate_response
+from core.llm_client import LLMClient
+from core.prompt import Prompt
 from core.tool_decorator import register_tool
 
 
@@ -26,5 +27,6 @@ def prompt_expert( description_of_expert: str, prompt: str) -> str:
          "content": f"Act as the following expert and respond accordingly: {description_of_expert}"},
         {"role": "user", "content": prompt}
     ])
-    response = generate_response(prompt)
+    llm_client = LLMClient()
+    response = llm_client.generate_response(prompt)
     return response

@@ -6,41 +6,79 @@ from typing import get_type_hints
 tools = {}
 tools_by_tag = {}
 
-def get_tool_metadata(func, tool_name=None, description=None, 
-                     parameters_override=None, terminal=False, 
-                     tags=None):
-    """Extract metadata while ignoring special parameters."""
-    signature = inspect.signature(func)
-    type_hints = get_type_hints(func)
+def get_tool_metadata(func, tool_name=None, description=None, parameters_override=None, terminal=False, tags=None):
+    """
+    Extracts metadata for a function to use in tool registration.
 
-    args_schema = {
-        "type": "object",
-        "properties": {},
-        "required": []
-    }
+    Parameters:
+        func (function): The function to extract metadata from.
+        tool_name (str, optional): The name of the tool. Defaults to the function name.
+        description (str, optional): Description of the tool. Defaults to the function's docstring.
+        parameters_override (dict, optional): Override for the argument schema. Defaults to dynamically inferred schema.
+        terminal (bool, optional): Whether the tool is terminal. Defaults to False.
+        tags (List[str], optional): List of tags to associate with the tool.
 
-    for param_name, param in signature.parameters.items():
-        # Skip special parameters - agent doesn't need to know about these
-        if param_name in ["action_context", "action_agent"] or \
-           param_name.startswith("_"):
-            continue
+    Returns:
+        dict: A dictionary containing metadata about the tool, including description, args schema, and the function.
+    """
+    # Default tool_name to the function name if not provided
+    tool_name = tool_name or func.__name__
 
-        # Add regular parameters to the schema
-        param_type = type_hints.get(param_name, str)
-        args_schema["properties"][param_name] = {
-            "type": "string"  # Simplified for example
+    # Default description to the function's docstring if not provided
+    description = description or (func.__doc__.strip() if func.__doc__ else "No description provided.")
+
+    # Discover the function's signature and type hints if no args_override is provided
+    if parameters_override is None:
+        signature = inspect.signature(func)
+        type_hints = get_type_hints(func)
+
+        # Build the arguments schema dynamically
+        args_schema = {
+            "type": "object",
+            "properties": {},
+            "required": []
         }
+        for param_name, param in signature.parameters.items():
 
-        if param.default == param.empty:
-            args_schema["required"].append(param_name)
+            if param_name in ["action_context", "action_agent"]:
+                continue  # Skip these parameters
 
+            def get_json_type(param_type):
+                if param_type == str:
+                    return "string"
+                elif param_type == int:
+                    return "integer"
+                elif param_type == float:
+                    return "number"
+                elif param_type == bool:
+                    return "boolean"
+                elif param_type == list:
+                    return "array"
+                elif param_type == dict:
+                    return "object"
+                else:
+                    return "string"
+
+            # Add parameter details
+            param_type = type_hints.get(param_name, str)  # Default to string if type is not annotated
+            param_schema = {"type": get_json_type(param_type)}  # Convert Python types to JSON schema types
+
+            args_schema["properties"][param_name] = param_schema
+
+            # Add to required if not defaulted
+            if param.default == inspect.Parameter.empty:
+                args_schema["required"].append(param_name)
+    else:
+        args_schema = parameters_override
+
+    # Return the metadata as a dictionary
     return {
-        "name": tool_name or func.__name__,
-        "description": description or func.__doc__,
+        "tool_name": tool_name,
+        "description": description,
         "parameters": args_schema,
-        "tags": tags or [],
+        "function": func,
         "terminal": terminal,
-        "function": func
+        "tags": tags or []
     }
 
 
@@ -70,7 +108,7 @@ def register_tool(tool_name=None, description=None, parameters_override=None, te
         )
 
         # Register the tool in the global dictionary
-        tools[metadata["name"]] = {
+        tools[metadata["tool_name"]] = {
             "description": metadata["description"],
             "parameters": metadata["parameters"],
             "function": metadata["function"],
@@ -81,7 +119,7 @@ def register_tool(tool_name=None, description=None, parameters_override=None, te
         for tag in metadata["tags"]:
             if tag not in tools_by_tag:
                 tools_by_tag[tag] = []
-            tools_by_tag[tag].append(metadata["name"])
+            tools_by_tag[tag].append(metadata["tool_name"])
 
         return func
     return decorator
