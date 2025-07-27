@@ -27,6 +27,7 @@ class LLMClient:
             )
             result = response.choices[0].message.content
         else:
+            print("Using tools:", tools)
             response = completion(
                 model=MODEL,
                 messages=messages,
